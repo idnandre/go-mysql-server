@@ -25,14 +25,14 @@ jobs:
       - name: Update Dolt's dependency
         run: |
           cd dolt/go
-          go get github.com/dolthub/go-mysql-server@${{ github.event.pull_request.head.sha }}
+          go get github.com/idnandre/go-mysql-server@${{ github.event.pull_request.head.sha }}
           go mod tidy
 
       - name: Update DoltgreSQL's dependency
         run: |
           cd doltgresql
           ./postgres/parser/build.sh
-          go get github.com/dolthub/go-mysql-server@${{ github.event.pull_request.head.sha }}
+          go get github.com/idnandre/go-mysql-server@${{ github.event.pull_request.head.sha }}
           go mod tidy
 
       - name: Test Dolt
