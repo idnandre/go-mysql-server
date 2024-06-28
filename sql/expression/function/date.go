@@ -411,7 +411,8 @@ func NewDatetime(args ...sql.Expression) (sql.Expression, error) {
 // UnixTimestamp converts the argument to the number of seconds since 1970-01-01 00:00:00 UTC.
 // With no argument, returns number of seconds since unix epoch for the current time.
 type UnixTimestamp struct {
-	Date sql.Expression
+	Date    sql.Expression
+	sqlType sql.Type
 }
 
 var _ sql.FunctionExpression = (*UnixTimestamp)(nil)
@@ -422,9 +423,42 @@ func NewUnixTimestamp(args ...sql.Expression) (sql.Expression, error) {
 		return nil, sql.ErrInvalidArgumentNumber.New("UNIX_TIMESTAMP", 1, len(args))
 	}
 	if len(args) == 0 {
-		return &UnixTimestamp{nil}, nil
+		return &UnixTimestamp{Date: nil, sqlType: types.Int64}, nil
 	}
-	return &UnixTimestamp{args[0]}, nil
+
+	sqlType := getSQLType(args[0])
+
+	return &UnixTimestamp{Date: args[0], sqlType: sqlType}, nil
+}
+
+func getSQLType(arg sql.Expression) sql.Type {
+	if arg == nil {
+		return types.Int64
+	}
+
+	date, err := arg.Eval(sql.NewEmptyContext(), nil)
+	if err != nil {
+		return types.Int64
+	}
+	if date == nil {
+		return types.Int64
+	}
+
+	date, _, err = types.DatetimeMaxPrecision.Convert(date)
+	if err != nil {
+		return types.Int64
+	}
+
+	t, ok := date.(time.Time)
+	if !ok {
+		return types.Int64
+	}
+
+	if t.Nanosecond() == 0 {
+		return types.Int64
+	}
+
+	return types.MustCreateDecimalType(19, 6)
 }
 
 // FunctionName implements sql.FunctionExpression
@@ -456,7 +490,11 @@ func (ut *UnixTimestamp) IsNullable() bool {
 }
 
 func (ut *UnixTimestamp) Type() sql.Type {
-	return types.Float64
+	if ut.sqlType == nil {
+		return types.Int64
+	}
+
+	return ut.sqlType
 }
 
 // CollationCoercibility implements the interface sql.CollationCoercible.
@@ -519,6 +557,10 @@ func (ut *UnixTimestamp) Eval(ctx *sql.Context, row sql.Row) (interface{}, error
 }
 
 func toUnixTimestamp(t time.Time) (interface{}, error) {
+	if !t.Before(time.Date(3001, 01, 19, 0, 0, 0, 0, time.UTC)) {
+		return float64(0), nil
+	}
+
 	ret, _, err := types.Float64.Convert(float64(t.Unix()) + float64(t.Nanosecond())/float64(1000000000))
 	return ret, err
 }

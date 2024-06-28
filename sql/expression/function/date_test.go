@@ -241,14 +241,25 @@ func TestUnixTimestamp(t *testing.T) {
 	require := require.New(t)
 
 	ctx := sql.NewEmptyContext()
-	_, err := NewUnixTimestamp()
+	utimestamp, err := NewUnixTimestamp()
 	require.NoError(err)
+	require.Equal(types.Int64, utimestamp.Type())
 
-	_, err = NewUnixTimestamp(expression.NewLiteral("2018-05-02", types.LongText))
+	utimestamp, err = NewUnixTimestamp(expression.NewLiteral("2018-05-02", types.LongText))
 	require.NoError(err)
+	require.Equal(types.Int64, utimestamp.Type())
 
-	_, err = NewUnixTimestamp(expression.NewLiteral("2018-05-02", types.LongText))
+	utimestamp, err = NewUnixTimestamp(expression.NewLiteral("2018-05-02", types.LongText))
 	require.NoError(err)
+	require.Equal(types.Int64, utimestamp.Type())
+
+	utimestamp, err = NewUnixTimestamp(expression.NewLiteral("2018-05-02 20:00:00", types.LongText))
+	require.NoError(err)
+	require.Equal(types.Int64, utimestamp.Type())
+
+	utimestamp, err = NewUnixTimestamp(expression.NewLiteral("2018-05-02 20:00:00.99999", types.LongText))
+	require.NoError(err)
+	require.Equal(types.MustCreateDecimalType(19, 6), utimestamp.Type())
 
 	_, err = NewUnixTimestamp(expression.NewLiteral("2018-05-02", types.LongText), expression.NewLiteral("2018-05-02", types.LongText))
 	require.Error(err)
@@ -267,7 +278,7 @@ func TestUnixTimestamp(t *testing.T) {
 
 	var ut sql.Expression
 	var expected interface{}
-	ut = &UnixTimestamp{nil}
+	ut = &UnixTimestamp{Date: nil}
 	expected = float64(date.Unix())
 	result, err := ut.Eval(ctx2, nil)
 	require.NoError(err)
@@ -277,6 +288,23 @@ func TestUnixTimestamp(t *testing.T) {
 	ut, err = NewUnixTimestamp(expression.NewLiteral("2018-05-02", types.LongText))
 	require.NoError(err)
 	expected = float64(time.Date(2018, 5, 2, 0, 0, 0, 0, time.UTC).Unix())
+	result, err = ut.Eval(ctx, nil)
+	require.NoError(err)
+	require.Equal(expected, result)
+	require.Equal(uint16(0), ctx.WarningCount())
+
+	ut, err = NewUnixTimestamp(expression.NewLiteral("2024-01-15 20:52:59.99", types.LongText))
+	require.NoError(err)
+	testTime := time.Date(2024, 1, 15, 20, 52, 59, 990000000, time.UTC)
+	expected = float64(testTime.Unix()) + (float64(testTime.Nanosecond()) / float64(1000000000))
+	result, err = ut.Eval(ctx, nil)
+	require.NoError(err)
+	require.Equal(expected, result)
+	require.Equal(uint16(0), ctx.WarningCount())
+
+	ut, err = NewUnixTimestamp(expression.NewLiteral("3001-01-19", types.LongText))
+	require.NoError(err)
+	expected = float64(0)
 	result, err = ut.Eval(ctx, nil)
 	require.NoError(err)
 	require.Equal(expected, result)
